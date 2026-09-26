@@ -1,0 +1,60 @@
+name: Chuyen Audio Thanh Van Ban (Whisper AI)
+
+on:
+  workflow_dispatch:
+    inputs:
+      audio_url:
+        description: 'Link tải file audio (hoặc để trống nếu đã upload file audio vào Repo)'
+        required: false
+        default: ''
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lay ma nguon Repo
+        uses: actions/checkout@v4
+
+      - name: Cai dat Python va ffmpeg
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Cai dat Whisper AI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install --upgrade pip
+          pip install openai-whisper
+
+      - name: Tai hoac Tim file audio
+        run: |
+          CLEAN_URL=$(echo "${{ github.event.inputs.audio_url }}" | xargs)
+          if [ -n "$CLEAN_URL" ]; then
+            echo "Dang tai audio tu link..."
+            wget --no-check-certificate -O input_audio.mp3 "$CLEAN_URL"
+            AUDIO="input_audio.mp3"
+          else
+            AUDIO=$(find . -maxdepth 1 -type f \( -iname "*.mp3" -o -iname "*.wav" -o -iname "*.m4a" -o -iname "*.aac" -o -iname "*.flac" \) | head -n 1)
+          fi
+
+          echo "File audio se xu ly: $AUDIO"
+          if [ -z "$AUDIO" ]; then
+            echo "Loi: Khong tim thay file audio!"
+            exit 1
+          fi
+          echo "AUDIO_FILE=$AUDIO" >> $GITHUB_ENV
+
+      - name: Chuyen Audio thanh Van ban
+        run: |
+          # Chạy Whisper tạo file txt và srt
+          whisper "$AUDIO_FILE" --model base --output_format txt --output_dir .
+          whisper "$AUDIO_FILE" --model base --output_format srt --output_dir .
+
+      - name: Tai file van ban ve may
+        uses: actions/upload-artifact@v4
+        with:
+          name: ket-qua-van-ban-phu-de
+          path: |
+            *.txt
+            *.srt
